@@ -12,7 +12,7 @@ const { sendButtons } = require('gifted-btns');
 const commands = [];
 const CHANNEL_LINK = 'https://whatsapp.com/channel/0029Vb7FYNA8qIzs2P5dcE37';
 const FOOTER = '> Megan-Prime | TrackerWanga';
-const PKG = require('../../../package.json');
+const PKG = require('../../package.json');
 
 async function sendBtn(sock, from, text, quoted) {
     const btns = [{ name: 'cta_url', buttonParamsJson: JSON.stringify({ display_text: '📢 Channel', url: CHANNEL_LINK }) }];

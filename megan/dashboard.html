@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Megan-Prime | Dashboard</title>
+    <script src="https://cdn.socket.io/4.8.0/socket.io.min.js"></script>
+    <style>
+        :root {
+            --bg: #0a0a0f; --card: #111118; --border: #1a1a2e;
+            --green: #00ff88; --red: #ff4455; --text: #c0c0d0; --dim: #606080;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; }
+        .sidebar { width: 220px; background: #0d0d16; border-right: 1px solid var(--border); padding: 20px 0; position: fixed; height: 100vh; }
+        .sidebar h1 { font-size: 1.2em; color: var(--green); padding: 0 20px; }
+        .sidebar .dot-row { padding: 20px; border-top: 1px solid var(--border); margin-top: auto; display: flex; align-items: center; gap: 8px; font-size: 0.8em; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; }
+        .dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
+        .dot.offline { background: var(--red); }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+        .main { margin-left: 220px; flex: 1; padding: 30px; }
+        .main h2 { color: #fff; margin-bottom: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 25px; }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+        .card .val { font-size: 2em; font-weight: 700; color: #fff; }
+        .card .lbl { font-size: 0.7em; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 5px; }
+        .btn { padding: 10px 20px; border: 1px solid var(--border); background: var(--card); color: var(--text); border-radius: 8px; cursor: pointer; margin-right: 8px; }
+        .btn:hover { border-color: var(--green); color: var(--green); }
+    </style>
+</head>
+<body>
+    <nav class="sidebar">
+        <h1>🤖 Megan-Prime</h1>
+        <p style="padding:5px 20px;color:var(--dim);font-size:0.7em;">Dashboard v1.0</p>
+        <div class="dot-row">
+            <div class="dot offline" id="botDot"></div>
+            <span id="botStatus">Disconnected</span>
+        </div>
+    </nav>
+    <main class="main">
+        <h2>📊 Bot Overview</h2>
+        <div class="grid">
+            <div class="card"><div class="val" id="cmds">0</div><div class="lbl">Commands</div></div>
+            <div class="card"><div class="val" id="uptime">0s</div><div class="lbl">Uptime</div></div>
+            <div class="card"><div class="val" id="mem">0 MB</div><div class="lbl">Memory</div></div>
+            <div class="card"><div class="val" id="loaded">0</div><div class="lbl">Loaded</div></div>
+            <div class="card"><div class="val" id="errors">0</div><div class="lbl">Errors</div></div>
+            <div class="card"><div class="val" id="apiStatus">--</div><div class="lbl">API Status</div></div>
+        </div>
+        <button class="btn" onclick="socket.emit('getStats')">🔄 Refresh</button>
+        <button class="btn" onclick="socket.emit('checkApi')">🔌 Check API</button>
+    </main>
+    <script>
+        const socket = io();
+        function fmtUptime(s) {
+            const d = Math.floor(s/86400), h = Math.floor((s%86400)/3600), m = Math.floor((s%3600)/60);
+            return d>0?`${d}d ${h}h`:h>0?`${h}h ${m}m`:`${m}m ${s%60}s`;
+        }
+        socket.on('stats', (d) => {
+            document.getElementById('botDot').className = 'dot ' + (d.status==='connected'?'online':'offline');
+            document.getElementById('botStatus').textContent = d.status==='connected'?'Online':'Offline';
+            document.getElementById('cmds').textContent = d.commands||0;
+            document.getElementById('uptime').textContent = fmtUptime(d.uptime||0);
+            document.getElementById('mem').textContent = (d.memory?.mb||0)+' MB';
+            document.getElementById('loaded').textContent = d.commandsLoaded||0;
+            document.getElementById('errors').textContent = d.errors||0;
+            document.getElementById('apiStatus').textContent = d.apiStatus||'--';
+        });
+        socket.on('apiStatus', (d) => {
+            document.getElementById('apiStatus').textContent = d.status;
+        });
+    </script>
+</body>
+</html>

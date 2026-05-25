@@ -17,7 +17,7 @@ const CREATOR = 'Megan APIs v3.6.4 | Tracker Wanga | Falcon Tech';
 
 async function apiGet(endpoint, params = {}, timeout = 90000) {
     const url = `${API_BASE}${endpoint}`;
-    const res = await axios.get(url, { params: { ...params, apikey: API_KEY }, timeout + 30000, headers: { 'User-Agent': 'Megan-Prime/1.0' } });
+    const res = await axios.get(url, { params: { ...params, apikey: API_KEY }, timeout, headers: { 'User-Agent': 'Megan-Prime/1.0' } });
     return res.data;
 }
 

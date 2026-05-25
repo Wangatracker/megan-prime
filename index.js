@@ -314,6 +314,17 @@ class MeganPrime {
             });
 
             this.sock = sock;
+            // Start dashboard server
+            const http = require('http');
+            const dashboardServer = http.createServer();
+            const Dashboard = require('./megan/lib/dashboard');
+            this.dashboard = new Dashboard(this);
+            
+            dashboardServer.listen(3000, () => {
+                console.log('📊 Dashboard: http://localhost:3000');
+            });
+            this.dashboard.init(dashboardServer);
+
             this.ownerJid = sock.user?.id;
             this.ownerLid = sock.user?.lid;
 

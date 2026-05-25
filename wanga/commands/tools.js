@@ -27,13 +27,13 @@ fs.ensureDirSync(TEMP_DIR);
 
 async function apiGet(endpoint, params = {}, timeout = 90000) {
     const url = `${API_BASE}${endpoint}`;
-    const res = await axios.get(url, { params: { ...params, apikey: API_KEY }, timeout + 30000, headers: { 'User-Agent': 'Megan-Prime/1.0' } });
+    const res = await axios.get(url, { params: { ...params, apikey: API_KEY }, timeout, headers: { 'User-Agent': 'Megan-Prime/1.0' } });
     return res.data;
 }
 
 async function apiPost(endpoint, data = {}, timeout = 90000) {
     const url = `${API_BASE}${endpoint}`;
-    const res = await axios.post(url, data, { params: { apikey: API_KEY }, timeout + 30000, headers: { 'User-Agent': 'Megan-Prime/1.0', 'Content-Type': 'application/json' } });
+    const res = await axios.post(url, data, { params: { apikey: API_KEY }, timeout, headers: { 'User-Agent': 'Megan-Prime/1.0', 'Content-Type': 'application/json' } });
     return res.data;
 }
 
