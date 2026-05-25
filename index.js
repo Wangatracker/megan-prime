@@ -38,6 +38,8 @@ const { handleViewOnce } = require('./megan/lib/viewOnceHandler');
 const { handleAntiLink } = require('./megan/lib/antiLink');
 const AutoPilot = require('./megan/lib/autoPilot');
 const TaskScheduler = require('./megan/lib/taskScheduler');
+const AutoCleaner = require('./megan/lib/autoCleaner');
+const ButtonHandler = require('./megan/lib/buttonHandler');
 
 class MeganPrime {
     constructor() {
@@ -57,6 +59,8 @@ class MeganPrime {
         this.ownerLid = null;
         this.autoPilot = null;
         this.taskScheduler = null;
+        this.buttonHandler = null;
+        this.autoCleaner = null;
         this.createRequiredFolders();
     }
 
@@ -95,6 +99,48 @@ class MeganPrime {
             console.log('🎮 [5/8] Initializing handlers...');
             this.autoReact = new AutoReactHandler(this);
             this.lidResolver = new LidResolver(this);
+            this.buttonHandler = new ButtonHandler(this);
+
+            // Register movie picker handler
+            this.buttonHandler.register('moviepick_', async (id, from, sender, msg, bot) => {
+                const subjectId = id.replace('moviepick_', '');
+                const search = global.movieSearches?.[from];
+                if (!search || Date.now() - search.timestamp > 300000) {
+                    await bot.sock.sendMessage(from, { text: 'Search expired. Please search again.' }, { quoted: msg });
+                    return;
+                }
+                const movie = search.results.find(m => 
+                    (m.subject_id || m.detail_path || m.id) === subjectId ||
+                    search.results.indexOf(m).toString() === subjectId
+                );
+                if (!movie) {
+                    await bot.sock.sendMessage(from, { text: 'Movie not found. Please search again.' }, { quoted: msg });
+                    return;
+                }
+                const detailPath = movie.detail_path || movie.slug || movie.id || movie.subject_id;
+                try {
+                    const axios = require('axios');
+                    const res = await axios.get(`https://movieapi.megan.qzz.io/api/movie/${detailPath}`, { timeout: 30000 });
+                    const d = res.data?.data || res.data;
+                    const poster = typeof d.poster === 'string' ? d.poster : d.poster?.url || '';
+                    const text = `🎬 *${d.title}* (${d.year})\n⭐ ${d.rating} | 🎭 ${(d.genres||[]).join(', ')}\n📝 ${(d.description||'').substring(0, 200)}...\n\n📡 Megan Movie API\n${FOOTER}`;
+                    
+                    if (poster) {
+                        await bot.sock.sendMessage(from, { image: { url: poster }, caption: text }, { quoted: msg });
+                    }
+                    
+                    // Send download/stream buttons
+                    const btns = [];
+                    btns.push({ name: 'cta_url', buttonParamsJson: JSON.stringify({ display_text: '📥 Download', url: `https://movieapi.megan.qzz.io/api/movie/${detailPath}/download?detail_path=${encodeURIComponent(detailPath)}` }) });
+                    btns.push({ name: 'cta_url', buttonParamsJson: JSON.stringify({ display_text: '▶️ Stream', url: `https://movies.megan.qzz.io/series/${detailPath}` }) });
+                    btns.push({ name: 'quick_reply', buttonParamsJson: JSON.stringify({ display_text: '🔍 New Search', id: 'cmd_.moviesearch' }) });
+                    
+                    const { sendButtons } = require('gifted-btns');
+                    await sendButtons(bot.sock, from, { title: 'Megan-Prime', text: `Download or stream "${d.title}"`, footer: FOOTER, buttons: btns }, { quoted: msg });
+                } catch(e) {
+                    await bot.sock.sendMessage(from, { text: `❌ Failed to get details\n\n${FOOTER}` }, { quoted: msg });
+                }
+            });
             console.log('✅ [5/8] Handlers ready\n');
 
             console.log('📅 [6/8] Initializing Task Scheduler...');
@@ -411,6 +457,12 @@ class MeganPrime {
 
     async processMessage(msg) {
         try {
+            // Handle interactive button responses first
+            if (this.buttonHandler) {
+                const handled = await this.buttonHandler.handle(msg);
+                if (handled) return;
+            }
+
             const from = msg.key.remoteJid;
             const isGroup = isJidGroup(from);
             const isStatus = from === 'status@broadcast';

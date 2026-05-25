@@ -7,11 +7,11 @@ const axios = require('axios');
 const fs = require('fs-extra');
 const path = require('path');
 const config = require('../../megan/config');
-const { sendButtons } = require('gifted-btns');
+const { sendButtons, sendInteractiveMessage } = require('gifted-btns');
 
 const commands = [];
 
-const MOVIE_API = 'https://movies.megan.qzz.io/api';
+const MOVIE_API = 'https://movieapi.megan.qzz.io/api';
 const CHANNEL_LINK = 'https://whatsapp.com/channel/0029Vb7FYNA8qIzs2P5dcE37';
 const TEMP_DIR = path.join(__dirname, '../../temp');
 const FOOTER = '> Megan-Prime | TrackerWanga';
@@ -36,8 +36,24 @@ async function cleanTemp() {
 
 async function movieApi(endpoint, params = {}) {
     const url = `${MOVIE_API}${endpoint}`;
-    const res = await axios.get(url, { params, timeout: 30000, headers: { 'User-Agent': 'Megan-Prime/1.0' } });
-    return res.data;
+    // Warm-up + retry
+    try { await axios.get(`${MOVIE_API}/`, { timeout: 10000 }).catch(()=>{}); } catch(e) {}
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+            const res = await axios.get(url, { 
+                params, 
+                timeout: 30000 + (attempt * 15000),
+                headers: { 'User-Agent': 'Megan-Prime/1.0' } 
+            });
+            return res.data;
+        } catch (e) {
+            if (attempt < 3 && (e.code === 'ECONNRESET' || e.code === 'ETIMEDOUT' || e.response?.status >= 500)) {
+                await new Promise(r => setTimeout(r, attempt * 3000));
+                continue;
+            }
+            throw e;
+        }
+    }
 }
 
 async function sendButtonsMsg(sock, from, text, quoted, extraButtons = []) {
@@ -106,20 +122,44 @@ commands.push({
 
             global.movieSearches[from] = { results, timestamp: Date.now(), type: 'movie' };
 
-            let text = `╭───[ 🎬 MOVIES: "${query}" ]───\n\n`;
-            results.forEach((m, i) => {
-                text += `├ *${i+1}.* ${m.title || m.name} (${m.year || 'N/A'})\n`;
-                text += `├ ⭐ ${m.rating || 'N/A'} | 🎭 ${(m.genres || []).join(', ')}\n\n`;
-            });
-            text += `╰───◇\n*Reply 1-${results.length} for details*\n${FOOTER}`;
+            // Build single_select catalog
+            const rows = results.slice(0, 5).map((m, i) => ({
+                header: `⭐ ${m.rating || 'N/A'} | ${m.year || 'N/A'}`,
+                title: `${i+1}. ${(m.title || m.name).substring(0, 50)}`,
+                description: (m.genres || []).join(', ') || 'Movie',
+                id: `moviepick_${m.subject_id || m.detail_path || i}`
+            }));
+
+            const text = `╭───[ 🎬 MOVIES: "${query}" ]───\n│ Pick a movie below to see details\n╰───◇\n${FOOTER}`;
 
             // Show first result poster
             const first = results[0];
             const poster = getPoster(first);
+            // Send poster with caption
             if (poster) {
                 await sock.sendMessage(from, { image: { url: poster }, caption: text }, { quoted: msg });
-            } else {
-                await sendButtonsMsg(sock, from, text, msg);
+            }
+            // Send catalog picker
+            try {
+                await sendInteractiveMessage(sock, from, {
+                    text: `🎬 *Results for "${query}"*\nPick a movie:`,
+                    footer: 'Megan Movie API',
+                    interactiveButtons: [{
+                        name: 'single_select',
+                        buttonParamsJson: JSON.stringify({
+                            title: 'Movies Found',
+                            sections: [{ title: 'Results', rows }]
+                        })
+                    }]
+                }, { quoted: msg });
+            } catch(e) {
+                // Fallback to text
+                let fallback = `🎬 *Results for "${query}"*\n\n`;
+                results.slice(0, 5).forEach((m, i) => {
+                    fallback += `*${i+1}.* ${m.title} (${m.year})\n⭐ ${m.rating} | ${m.genres.join(', ')}\n\n`;
+                });
+                fallback += `Reply .moviedl <number> to download\n${FOOTER}`;
+                await sendButtonsMsg(sock, from, fallback, msg);
             }
             await react('✅');
         } catch (e) { await react('❌'); await sendButtonsMsg(sock, from, `❌ *No movies found*\n\n${FOOTER}`, msg); }
@@ -140,6 +180,13 @@ commands.push({
             if (!results.length) throw new Error('No series found');
 
             global.movieSearches[from] = { results, timestamp: Date.now(), type: 'tv' };
+            const tvBtns = results.slice(0, 5).map((m, i) => ({
+                name: 'quick_reply',
+                buttonParamsJson: JSON.stringify({
+                    display_text: `${i+1}. ${(m.title || m.name).substring(0, 20)}`,
+                    id: `movselect ${i+1}`
+                })
+            }));
 
             let text = `╭───[ 📺 TV: "${query}" ]───\n\n`;
             results.forEach((s, i) => {
@@ -150,10 +197,31 @@ commands.push({
 
             const first = results[0];
             const poster = getPoster(first);
+            // Send poster with caption
             if (poster) {
                 await sock.sendMessage(from, { image: { url: poster }, caption: text }, { quoted: msg });
-            } else {
-                await sendButtonsMsg(sock, from, text, msg);
+            }
+            // Send catalog picker
+            try {
+                await sendInteractiveMessage(sock, from, {
+                    text: `🎬 *Results for "${query}"*\nPick a movie:`,
+                    footer: 'Megan Movie API',
+                    interactiveButtons: [{
+                        name: 'single_select',
+                        buttonParamsJson: JSON.stringify({
+                            title: 'Movies Found',
+                            sections: [{ title: 'Results', rows }]
+                        })
+                    }]
+                }, { quoted: msg });
+            } catch(e) {
+                // Fallback to text
+                let fallback = `🎬 *Results for "${query}"*\n\n`;
+                results.slice(0, 5).forEach((m, i) => {
+                    fallback += `*${i+1}.* ${m.title} (${m.year})\n⭐ ${m.rating} | ${m.genres.join(', ')}\n\n`;
+                });
+                fallback += `Reply .moviedl <number> to download\n${FOOTER}`;
+                await sendButtonsMsg(sock, from, fallback, msg);
             }
             await react('✅');
         } catch (e) { await react('❌'); await sendButtonsMsg(sock, from, `❌ *No series found*\n\n${FOOTER}`, msg); }
@@ -174,6 +242,13 @@ commands.push({
             if (!results.length) throw new Error('No anime found');
 
             global.movieSearches[from] = { results, timestamp: Date.now(), type: 'anime' };
+            const animeBtns = results.slice(0, 5).map((m, i) => ({
+                name: 'quick_reply',
+                buttonParamsJson: JSON.stringify({
+                    display_text: `${i+1}. ${(m.title || m.name).substring(0, 20)}`,
+                    id: `movselect ${i+1}`
+                })
+            }));
 
             let text = `╭───[ 🌸 ANIME: "${query}" ]───\n\n`;
             results.forEach((a, i) => {
@@ -184,10 +259,31 @@ commands.push({
 
             const first = results[0];
             const poster = getPoster(first);
+            // Send poster with caption
             if (poster) {
                 await sock.sendMessage(from, { image: { url: poster }, caption: text }, { quoted: msg });
-            } else {
-                await sendButtonsMsg(sock, from, text, msg);
+            }
+            // Send catalog picker
+            try {
+                await sendInteractiveMessage(sock, from, {
+                    text: `🎬 *Results for "${query}"*\nPick a movie:`,
+                    footer: 'Megan Movie API',
+                    interactiveButtons: [{
+                        name: 'single_select',
+                        buttonParamsJson: JSON.stringify({
+                            title: 'Movies Found',
+                            sections: [{ title: 'Results', rows }]
+                        })
+                    }]
+                }, { quoted: msg });
+            } catch(e) {
+                // Fallback to text
+                let fallback = `🎬 *Results for "${query}"*\n\n`;
+                results.slice(0, 5).forEach((m, i) => {
+                    fallback += `*${i+1}.* ${m.title} (${m.year})\n⭐ ${m.rating} | ${m.genres.join(', ')}\n\n`;
+                });
+                fallback += `Reply .moviedl <number> to download\n${FOOTER}`;
+                await sendButtonsMsg(sock, from, fallback, msg);
             }
             await react('✅');
         } catch (e) { await react('❌'); await sendButtonsMsg(sock, from, `❌ *No anime found*\n\n${FOOTER}`, msg); }
@@ -519,10 +615,32 @@ commands.push({
                 buttonParamsJson: JSON.stringify({ display_text: `▶️ ${s.quality}`, url: s.url })
             }));
 
+            // Send poster with caption
             if (poster) {
                 await sock.sendMessage(from, { image: { url: poster }, caption: text }, { quoted: msg });
             }
-            await sendButtonsMsg(sock, from, text, msg, btns);
+            // Send catalog picker
+            try {
+                await sendInteractiveMessage(sock, from, {
+                    text: `🎬 *Results for "${query}"*\nPick a movie:`,
+                    footer: 'Megan Movie API',
+                    interactiveButtons: [{
+                        name: 'single_select',
+                        buttonParamsJson: JSON.stringify({
+                            title: 'Movies Found',
+                            sections: [{ title: 'Results', rows }]
+                        })
+                    }]
+                }, { quoted: msg });
+            } catch(e) {
+                // Fallback to text
+                let fallback = `🎬 *Results for "${query}"*\n\n`;
+                results.slice(0, 5).forEach((m, i) => {
+                    fallback += `*${i+1}.* ${m.title} (${m.year})\n⭐ ${m.rating} | ${m.genres.join(', ')}\n\n`;
+                });
+                fallback += `Reply .moviedl <number> to download\n${FOOTER}`;
+                await sendButtonsMsg(sock, from, fallback, msg);
+            }
             await react('✅');
         } catch (e) { await react('❌'); await sendButtonsMsg(sock, from, `❌ *Failed*\n\n${FOOTER}`, msg); }
     }
@@ -565,10 +683,32 @@ commands.push({
                 buttonParamsJson: JSON.stringify({ display_text: `▶️ S${s1.season}E${e.episode}`, url: e.stream_url })
             }));
 
+            // Send poster with caption
             if (poster) {
                 await sock.sendMessage(from, { image: { url: poster }, caption: text }, { quoted: msg });
             }
-            await sendButtonsMsg(sock, from, text, msg, btns);
+            // Send catalog picker
+            try {
+                await sendInteractiveMessage(sock, from, {
+                    text: `🎬 *Results for "${query}"*\nPick a movie:`,
+                    footer: 'Megan Movie API',
+                    interactiveButtons: [{
+                        name: 'single_select',
+                        buttonParamsJson: JSON.stringify({
+                            title: 'Movies Found',
+                            sections: [{ title: 'Results', rows }]
+                        })
+                    }]
+                }, { quoted: msg });
+            } catch(e) {
+                // Fallback to text
+                let fallback = `🎬 *Results for "${query}"*\n\n`;
+                results.slice(0, 5).forEach((m, i) => {
+                    fallback += `*${i+1}.* ${m.title} (${m.year})\n⭐ ${m.rating} | ${m.genres.join(', ')}\n\n`;
+                });
+                fallback += `Reply .moviedl <number> to download\n${FOOTER}`;
+                await sendButtonsMsg(sock, from, fallback, msg);
+            }
             await react('✅');
         } catch (e) { await react('❌'); await sendButtonsMsg(sock, from, `❌ *Failed*\n\n${FOOTER}`, msg); }
     }
@@ -599,10 +739,31 @@ commands.push({
 
             const first = results[0];
             const poster = getPoster(first);
+            // Send poster with caption
             if (poster) {
                 await sock.sendMessage(from, { image: { url: poster }, caption: text }, { quoted: msg });
-            } else {
-                await sendButtonsMsg(sock, from, text, msg);
+            }
+            // Send catalog picker
+            try {
+                await sendInteractiveMessage(sock, from, {
+                    text: `🎬 *Results for "${query}"*\nPick a movie:`,
+                    footer: 'Megan Movie API',
+                    interactiveButtons: [{
+                        name: 'single_select',
+                        buttonParamsJson: JSON.stringify({
+                            title: 'Movies Found',
+                            sections: [{ title: 'Results', rows }]
+                        })
+                    }]
+                }, { quoted: msg });
+            } catch(e) {
+                // Fallback to text
+                let fallback = `🎬 *Results for "${query}"*\n\n`;
+                results.slice(0, 5).forEach((m, i) => {
+                    fallback += `*${i+1}.* ${m.title} (${m.year})\n⭐ ${m.rating} | ${m.genres.join(', ')}\n\n`;
+                });
+                fallback += `Reply .moviedl <number> to download\n${FOOTER}`;
+                await sendButtonsMsg(sock, from, fallback, msg);
             }
             await react('✅');
         } catch (e) { await react('❌'); await sendButtonsMsg(sock, from, `❌ *Failed*\n\n${FOOTER}`, msg); }
@@ -670,6 +831,13 @@ commands.push({
             if (!results.length) throw new Error('No anime');
 
             global.movieSearches[from] = { results, timestamp: Date.now(), type: 'anime' };
+            const animeBtns = results.slice(0, 5).map((m, i) => ({
+                name: 'quick_reply',
+                buttonParamsJson: JSON.stringify({
+                    display_text: `${i+1}. ${(m.title || m.name).substring(0, 20)}`,
+                    id: `movselect ${i+1}`
+                })
+            }));
 
             let text = `╭───[ 🌸 ANIME ]───\n\n`;
             results.slice(0, 10).forEach((a, i) => {
@@ -679,10 +847,31 @@ commands.push({
 
             const first = results[0];
             const poster = getPoster(first);
+            // Send poster with caption
             if (poster) {
                 await sock.sendMessage(from, { image: { url: poster }, caption: text }, { quoted: msg });
-            } else {
-                await sendButtonsMsg(sock, from, text, msg);
+            }
+            // Send catalog picker
+            try {
+                await sendInteractiveMessage(sock, from, {
+                    text: `🎬 *Results for "${query}"*\nPick a movie:`,
+                    footer: 'Megan Movie API',
+                    interactiveButtons: [{
+                        name: 'single_select',
+                        buttonParamsJson: JSON.stringify({
+                            title: 'Movies Found',
+                            sections: [{ title: 'Results', rows }]
+                        })
+                    }]
+                }, { quoted: msg });
+            } catch(e) {
+                // Fallback to text
+                let fallback = `🎬 *Results for "${query}"*\n\n`;
+                results.slice(0, 5).forEach((m, i) => {
+                    fallback += `*${i+1}.* ${m.title} (${m.year})\n⭐ ${m.rating} | ${m.genres.join(', ')}\n\n`;
+                });
+                fallback += `Reply .moviedl <number> to download\n${FOOTER}`;
+                await sendButtonsMsg(sock, from, fallback, msg);
             }
             await react('✅');
         } catch (e) { await react('❌'); await sendButtonsMsg(sock, from, `❌ *No anime*\n\n${FOOTER}`, msg); }
