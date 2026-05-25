@@ -1,0 +1,346 @@
+// Megan-Prime Basic Commands - Clean version with buttons
+const config = require('../../megan/config');
+const moment = require('moment-timezone');
+const os = require('os');
+
+const commands = [];
+
+const CHANNEL_LINK = 'https://whatsapp.com/channel/0029Vb7FYNA8qIzs2P5dcE37';
+
+async function sendWithButtons(sock, from, text, quotedMsg, buttons) {
+    try {
+        // Use gifted-btns sendButtons directly
+        const { sendButtons } = require('gifted-btns');
+        const buttonOptions = {
+            title: 'Megan-Prime',
+            text: text,
+            footer: '> Megan-Prime | TrackerWanga',
+            buttons: [
+                {
+                    name: 'cta_url',
+                    buttonParamsJson: JSON.stringify({
+                        display_text: '📢 Join Channel',
+                        url: 'https://whatsapp.com/channel/0029Vb7FYNA8qIzs2P5dcE37'
+                    })
+                }
+            ]
+        };
+        await sendButtons(sock, from, buttonOptions, { quoted: quotedMsg });
+    } catch (e) {
+        // Fallback to plain text
+        console.log('Button send failed, using text fallback:', e.message);
+        await sock.sendMessage(from, { text: text }, { quoted: quotedMsg });
+    }
+}
+
+// PING
+commands.push({
+    name: 'ping',
+    description: 'Check bot response time',
+    aliases: ['p'],
+    async execute({ msg, from, sender, args, bot, sock, react, reply, buttons }) {
+        const start = Date.now();
+        const sentMsg = await sock.sendMessage(from, { text: '🏓 Pong!' }, { quoted: msg });
+        const end = Date.now();
+        const ping = end - start;
+        const resultText = `*🏓 PONG!*\n\n📡 *Response:* ${ping}ms\n\n> Megan-Prime | TrackerWanga`;
+        await sock.sendMessage(from, { text: resultText, edit: sentMsg.key }, { quoted: msg });
+        await sendWithButtons(sock, from, resultText, msg, buttons);
+    }
+});
+
+// UPTIME
+commands.push({
+    name: 'uptime',
+    description: 'Show bot uptime',
+    aliases: ['runtime'],
+    async execute({ msg, from, sender, bot, sock, react, reply, buttons }) {
+        const uptime = process.uptime();
+        const days = Math.floor(uptime / 86400);
+        const hours = Math.floor((uptime % 86400) / 3600);
+        const minutes = Math.floor((uptime % 3600) / 60);
+        const seconds = Math.floor(uptime % 60);
+        const resultText = `*⏱️ UPTIME*\n\n📅 *Days:* ${days}\n⏰ *Hours:* ${hours}\n⏱️ *Minutes:* ${minutes}\n⏲️ *Seconds:* ${seconds}\n\n> Megan-Prime | TrackerWanga`;
+        await sendWithButtons(sock, from, resultText, msg, buttons);
+    }
+});
+
+// INFO
+commands.push({
+    name: 'info',
+    description: 'Show bot information',
+    aliases: ['bot'],
+    async execute({ msg, from, sender, bot, sock, react, reply, buttons }) {
+        const now = moment().tz(config.TIMEZONE || 'Africa/Nairobi');
+        const timeStr = now.format('h:mm A');
+        const dateStr = now.format('DD/MM/YYYY');
+        const uptime = process.uptime();
+        const days = Math.floor(uptime / 86400);
+        const hours = Math.floor((uptime % 86400) / 3600);
+        const totalMem = os.totalmem() / (1024 * 1024 * 1024);
+        const freeMem = os.freemem() / (1024 * 1024 * 1024);
+        const usedMem = (totalMem - freeMem).toFixed(2);
+        const totalMemFixed = totalMem.toFixed(2);
+        const infoText = `📱 *BOT INFO*\n\n` +
+            `👤 *Owner:* ${config.OWNER_NAME}\n` +
+            `📞 *Phone:* ${config.OWNER_NUMBER}\n` +
+            `🤖 *Bot:* ${config.BOT_NAME}\n` +
+            `🔧 *Prefix:* ${config.PREFIX}\n` +
+            `⚙️ *Mode:* ${config.MODE}\n` +
+            `📚 *Commands:* ${bot.commands.size}\n` +
+            `⏱️ *Uptime:* ${days}d ${hours}h\n` +
+            `🕒 *Time:* ${timeStr}\n` +
+            `📅 *Date:* ${dateStr}\n` +
+            `💾 *RAM:* ${usedMem}GB/${totalMemFixed}GB\n\n` +
+            `> Megan-Prime | TrackerWanga`;
+        await sendWithButtons(sock, from, infoText, msg, buttons);
+        await react('✅');
+    }
+});
+
+// MENU
+commands.push({
+    name: 'menu',
+    description: 'Show all commands',
+    aliases: ['help', 'cmds'],
+    async execute({ msg, from, sender, bot, sock, react, reply, buttons }) {
+        const now = moment().tz(config.TIMEZONE || 'Africa/Nairobi');
+        const timeStr = now.format('h:mm A');
+        const dateStr = now.format('DD/MM/YYYY');
+        const uptime = process.uptime();
+        const days = Math.floor(uptime / 86400);
+        const hours = Math.floor((uptime % 86400) / 3600);
+        const minutes = Math.floor((uptime % 3600) / 60);
+        const totalMem = os.totalmem() / (1024 * 1024 * 1024);
+        const freeMem = os.freemem() / (1024 * 1024 * 1024);
+        const usedMem = (totalMem - freeMem).toFixed(2);
+        const totalMemFixed = totalMem.toFixed(2);
+
+        let menu = `        Megan-Prime\n\n`;
+        menu += `✧･ﾟ: ✧･ﾟ:  SYSTEM  :･ﾟ✧:･ﾟ✧\n`;
+        menu += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        menu += `➤ Version  : 1.0.0\n`;
+        menu += `➤ Owner   : ${config.OWNER_NAME}\n`;
+        menu += `➤ Platform : Ubuntu 20.04\n`;
+        menu += `➤ Prefix  : ${config.PREFIX}\n`;
+        menu += `➤ Commands: ${bot.commands.size}\n`;
+        menu += `➤ Uptime  : ${days}d ${hours}h ${minutes}m\n`;
+        menu += `➤ Time    : ${timeStr}\n`;
+        menu += `➤ Date    : ${dateStr}\n`;
+        menu += `➤ RAM     : ${usedMem}GB/${totalMemFixed}GB\n`;
+        menu += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+        menu += `        MOST USED\n`;
+        menu += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        menu += `➥ megan\n➥ movie\n➥ kenyanews\n➥ play\n➥ dl\n`;
+        menu += `➥ browse\n➥ spotify\n➥ games\n\n`;
+
+        menu += `            AI\n`;
+        menu += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        menu += `➥ megan\n➥ gemini\n➥ gemini-lite\n➥ gpt\n`;
+        menu += `➥ deepseek\n➥ glm\n➥ phi\n➥ qwen\n➥ llama\n`;
+        menu += `➥ mistral\n➥ duckai\n➥ bibleai\n➥ gita\n`;
+        menu += `➥ teacher\n➥ codellama\n➥ replit\n➥ wormgpt\n`;
+        menu += `➥ chatglm\n➥ nemotron\n➥ command\n➥ orca\n`;
+        menu += `➥ tinyllama\n➥ yi\n➥ openhermes\n➥ nous\n`;
+        menu += `➥ dolphin\n➥ zephyr\n➥ groq\n`;
+        menu += `➥ setbibleversion\n➥ aimode\n➥ aimenu\n\n`;
+
+        menu += `         AI IMAGE\n`;
+        menu += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        menu += `➥ image\n➥ images\n➥ pinterest\n➥ wallpaper\n`;
+        menu += `➥ imagine\n➥ create\n➥ beautiful\n➥ circle\n`;
+        menu += `➥ filter\n➥ removebg\n➥ upscale\n➥ sdxl\n`;
+        menu += `➥ flux\n➥ imagemen\n\n`;
+
+        menu += `          BROWSE\n`;
+        menu += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        menu += `➥ browse\n➥ subdomains\n➥ tinyurl\n\n`;
+
+        menu += `        DOWNLOADER\n`;
+        menu += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        menu += `➥ play\n➥ ytmp3\n➥ ytmp4\n➥ spotifydl\n`;
+        menu += `➥ soundcloud\n➥ tiktokdl\n➥ instagramdl\n`;
+        menu += `➥ facebookdl\n➥ twitterdl\n➥ gdrivedl\n`;
+        menu += `➥ capcut\n➥ savefrom\n➥ dlfiles\n\n`;
+
+        menu += `      EPHOTO EFFECTS\n`;
+        menu += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        menu += `➥ 1917style\n➥ advancedglow\n➥ blackpinklogo\n`;
+        menu += `➥ blackpinkstyle\n➥ cartoonstyle\n➥ dragonball\n`;
+        menu += `➥ galaxystyle\n➥ glitchtext\n➥ glowingtext\n`;
+        menu += `➥ gradienttext\n➥ graffiti\n➥ luxurygold\n`;
+        menu += `➥ matrix\n➥ neonglitch\n➥ sand\n➥ watercolortext\n\n`;
+
+        menu += `          GROUP\n`;
+        menu += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        menu += `➥ creategroup\n➥ groupinfo\n➥ tagall\n➥ tagadmins\n`;
+        menu += `➥ invite\n➥ join\n➥ leave\n➥ lock\n➥ poll\n\n`;
+
+        menu += `          MEDIA\n`;
+        menu += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        menu += `➥ sticker\n➥ toimage\n➥ say\n➥ voice\n➥ toaudio\n`;
+        menu += `➥ catbox\n➥ waifu\n➥ neko\n➥ meme\n`;
+        menu += `➥ cleantemp\n➥ textpro\n\n`;
+
+        menu += `          NEWS\n`;
+        menu += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        menu += `➥ newstop\n➥ technews\n➥ sportsnews\n➥ kenyanews\n\n`;
+
+        menu += `          OWNER\n`;
+        menu += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        menu += `➥ setprefix\n➥ setbotname\n➥ setmode\n➥ setownername\n`;
+        menu += `➥ setbio\n➥ block\n➥ unblock\n➥ blacklist\n`;
+        menu += `➥ whitelist\n➥ muteuser\n➥ warnuser\n`;
+        menu += `➥ resetwarns\n➥ autoreact\n➥ autoread\n`;
+        menu += `➥ antidelete\n➥ anticall\n➥ features\n\n`;
+
+        menu += `         SEARCH\n`;
+        menu += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        menu += `➥ google\n➥ bing\n➥ duckduckgo\n➥ wiki\n`;
+        menu += `➥ dictionary\n➥ thesaurus\n➥ movie\n➥ anime\n`;
+        menu += `➥ youtube\n➥ spotifysearch\n➥ lyrics\n`;
+        menu += `➥ weather\n➥ github\n➥ npm\n➥ bible\n➥ quran\n\n`;
+
+        menu += `        SETTINGS\n`;
+        menu += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        menu += `➥ mypic\n➥ myabout\n➥ listblocked\n➥ antilink\n`;
+        menu += `➥ save\n➥ vv\n➥ statushelp\n\n`;
+
+        menu += `          TOOLS\n`;
+        menu += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        menu += `➥ binary\n➥ base64\n➥ hash\n➥ morse\n`;
+        menu += `➥ encrypt\n➥ decrypt\n➥ password\n➥ vcc\n`;
+        menu += `➥ email\n➥ uuid\n➥ calculate\n➥ fliptext\n`;
+        menu += `➥ emojimix\n➥ zodiak\n➥ ping\n➥ uptime\n`;
+        menu += `➥ info\n➥ tools\n\n`;
+
+        menu += `       HELPER MENUS\n`;
+        menu += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        menu += `➥ aimenu\n➥ imagemen\n➥ ephotomenu\n`;
+        menu += `➥ grouphelp\n➥ features\n➥ searchhelp\n`;
+        menu += `➥ tools\n➥ usermgmt\n➥ chathelp\n\n`;
+
+        menu += `✤✥✤✥✤✥✤✥✤✥✤✥✤✥✤✥✤✥✤✥\n`;
+        menu += `   Powered by Megan-Prime   \n`;
+        menu += `✤✥✤✥✤✥✤✥✤✥✤✥✤✥✤✥✤✥✤✥\n`;
+        menu += `✨ TrackerWanga ✨`;
+
+        await sendWithButtons(sock, from, menu, msg, buttons);
+    }
+});
+
+// OWNER
+commands.push({
+    name: 'owner',
+    description: 'Show owner information',
+    aliases: ['creator'],
+    async execute({ msg, from, sender, bot, sock, buttons }) {
+        const ownerInfo = `👑 *OWNER INFO*\n\n` +
+            `📛 *Name:* ${config.OWNER_NAME}\n` +
+            `📞 *Phone:* ${config.OWNER_NUMBER}\n` +
+            `🌍 *Country:* Kenya\n\n` +
+            `> Megan-Prime | TrackerWanga`;
+        await sendWithButtons(sock, from, ownerInfo, msg, buttons);
+    }
+});
+
+// STATUS
+commands.push({
+    name: 'status',
+    description: 'Show bot status',
+    aliases: ['stats'],
+    async execute({ msg, from, sender, bot, sock, buttons }) {
+        const uptime = process.uptime();
+        const days = Math.floor(uptime / 86400);
+        const hours = Math.floor((uptime % 86400) / 3600);
+        const minutes = Math.floor((uptime % 3600) / 60);
+        const seconds = Math.floor(uptime % 60);
+        const memory = process.memoryUsage();
+        const usedMB = Math.round(memory.heapUsed / 1024 / 1024);
+        const statusText = `📊 *BOT STATUS*\n\n` +
+            `⏱️ *Uptime:* ${days}d ${hours}h ${minutes}m ${seconds}s\n` +
+            `💾 *Memory:* ${usedMB}MB\n` +
+            `📚 *Commands:* ${bot.commands.size}\n` +
+            `⚡ *Node:* ${process.version}\n\n` +
+            `> Megan-Prime | TrackerWanga`;
+        await sendWithButtons(sock, from, statusText, msg, buttons);
+    }
+});
+
+// DEBUG
+commands.push({
+    name: 'debug',
+    description: 'Show debug information',
+    aliases: [],
+    async execute({ msg, from, sender, bot, sock, buttons }) {
+        const uptime = process.uptime();
+        const days = Math.floor(uptime / 86400);
+        const hours = Math.floor((uptime % 86400) / 3600);
+        const minutes = Math.floor((uptime % 3600) / 60);
+        const seconds = Math.floor(uptime % 60);
+        const debugInfo = `🔧 *DEBUG INFO*\n\n` +
+            `🤖 *Bot:* ${config.BOT_NAME}\n` +
+            `👤 *Owner:* ${config.OWNER_NAME}\n` +
+            `🔧 *Prefix:* ${config.PREFIX}\n` +
+            `⏱️ *Uptime:* ${days}d ${hours}h ${minutes}m ${seconds}s\n` +
+            `⚡ *Node:* ${process.version}\n` +
+            `💻 *Platform:* ${process.platform}\n` +
+            `📚 *Commands:* ${bot.commands.size}\n\n` +
+            `> Megan-Prime | TrackerWanga`;
+        await sendWithButtons(sock, from, debugInfo, msg, buttons);
+    }
+});
+
+// TRACKER
+commands.push({
+    name: 'tracker',
+    description: 'Show database tracker statistics',
+    aliases: ['dbstats'],
+    async execute({ msg, from, sender, bot, sock, buttons }) {
+        try {
+            const stats = bot.db?.getStats ? bot.db.getStats() : { totalCommands: 0, totalUsers: 0, totalGroups: 0 };
+            const uptime = process.uptime();
+            const days = Math.floor(uptime / 86400);
+            const hours = Math.floor((uptime % 86400) / 3600);
+            const minutes = Math.floor((uptime % 3600) / 60);
+            const statText = `📊 *DATABASE STATS*\n\n` +
+                `📨 *Commands Run:* ${stats.totalCommands}\n` +
+                `👥 *Users:* ${stats.totalUsers}\n` +
+                `👥 *Groups:* ${stats.totalGroups}\n` +
+                `⏱️ *Uptime:* ${days}d ${hours}h ${minutes}m\n\n` +
+                `> Megan-Prime | TrackerWanga`;
+            await sendWithButtons(sock, from, statText, msg, buttons);
+        } catch (error) {
+            console.error('Tracker error:', error);
+            await sendWithButtons(sock, from, '❌ Error getting tracker stats.\n\n> Megan-Prime | TrackerWanga', msg, buttons);
+        }
+    }
+});
+
+
+// API STATUS (Megan API)
+commands.push({
+    name: 'apistatus',
+    description: 'Check Megan API server status',
+    aliases: ['serverstatus', 'apistats'],
+    async execute({ msg, from, sender, args, bot, sock, react, reply }) {
+        await react('🖥️');
+        try {
+            const data = await apiGet('/api/status');
+            const s = data.result || data;
+            let text = `🖥️ *Megan API Status*\n\n`;
+            if (s.uptime) text += `⏱️ *Uptime:* ${s.uptime}\n`;
+            if (s.version) text += `📌 *Version:* ${s.version}\n`;
+            if (s.status) text += `✅ *Status:* ${s.status}\n`;
+            if (s.endpoints) text += `🔢 *Endpoints:* ${s.endpoints}\n`;
+            if (s.memory) text += `💾 *Memory:* ${s.memory}\n`;
+            text += `\n📡 ${CREATOR}\n\n${FOOTER}`;
+            await sendButtonsMsg(sock, from, text, msg);
+            await react('✅');
+        } catch (e) { await react('❌'); await reply(`❌ *Failed*\n\n${FOOTER}`); }
+    }
+});
+
+
+module.exports = { commands };

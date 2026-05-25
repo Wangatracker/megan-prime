@@ -1,0 +1,9 @@
+.env
+sessions/
+node_modules/
+temp/
+*.sqlite
+ai_memories/
+media_store/
+logs/
+*.log
