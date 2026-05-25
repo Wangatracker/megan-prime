@@ -284,3 +284,218 @@ commands.push({
 });
 
 module.exports = { commands };
+
+// ═══════════════════════════════════════════
+// 7. PAIR - Generate pairing code
+// ═══════════════════════════════════════════
+commands.push({
+    name: 'pair', description: 'Generate WhatsApp pairing code',
+    aliases: ['paircode', 'getcode', 'connect'],
+    async execute({ msg, from, sender, args, bot, sock, react, reply }) {
+        if (!args.length) {
+            await react('ℹ️');
+            return reply(`📱 *PAIR CODE*\n\n*Usage:* ${config.PREFIX}pair <phone number>\n*Example:* ${config.PREFIX}pair 254758476795\n\nGenerates a pairing code for WhatsApp connection.\n\n${FOOTER}`);
+        }
+        
+        const phone = args[0].replace(/[^0-9]/g, '');
+        if (phone.length < 10) {
+            await react('❌');
+            return reply(`❌ *Invalid number*\n\nInclude country code: 254XXXXXXXXX\n\n${FOOTER}`);
+        }
+        
+        await react('📱');
+        await sock.sendMessage(from, { text: `📱 *Generating pairing code...*\n\nNumber: +${phone}\nPlease wait...\n\n${FOOTER}` }, { quoted: msg });
+        
+        try {
+            const axios = require('axios');
+            // Try primary pairing site
+            let code;
+            try {
+                const res = await axios.get(`https://megan-session-pairing.onrender.com/pair?number=${phone}`, { timeout: 60000 });
+                code = res.data?.code;
+            } catch(e) {
+                // Fallback: use built-in pairing
+                if (sock && !sock.authState?.creds?.registered) {
+                    code = await sock.requestPairingCode(phone);
+                }
+            }
+            
+            if (code) {
+                const text = `╔══════════════════════╗\n` +
+                    `║   📱 PAIRING CODE    ║\n` +
+                    `╚══════════════════════╝\n\n` +
+                    `│ 📞 Number: *+${phone}*\n` +
+                    `│ 🔢 Code: *${code}*\n` +
+                    `│\n` +
+                    `│ ⚡ Open WhatsApp > Linked Devices\n` +
+                    `│ 🔗 Tap 'Link a Device'\n` +
+                    `│ 📲 Enter the code above\n` +
+                    `│\n` +
+                    `│ ⏰ Code expires in 60 seconds\n` +
+                    `╰──────────────────◇\n${FOOTER}`;
+                
+                await sendBtn(sock, from, text, msg);
+            } else {
+                throw new Error('No code generated');
+            }
+            await react('✅');
+        } catch (e) {
+            await react('❌');
+            await sendBtn(sock, from, `╭───[ ❌ FAILED ]───\n│\n│ ${e.message?.substring(0, 100) || 'Service unavailable'}\n│\n│ 💡 Try again in a few seconds\n│ 🌐 Or visit:\n│ https://megan-session-pairing.onrender.com\n│\n╰──◇\n${FOOTER}`, msg);
+        }
+    }
+});
+
+// ═══════════════════════════════════════════
+// 8. REPO - Show repository info
+// ═══════════════════════════════════════════
+commands.push({
+    name: 'repo', description: 'Show bot repository & deploy info',
+    aliases: ['repository', 'source', 'github'],
+    async execute({ msg, from, sender, args, bot, sock, react, reply }) {
+        await react('📦');
+        
+        const text = `╔══════════════════════╗\n` +
+            `║   📦 BOT SOURCE      ║\n` +
+            `╚══════════════════════╝\n\n` +
+            `│ 🔗 *GitHub:*\n` +
+            `│ https://github.com/TrackerWanga/megan-prime\n` +
+            `│\n` +
+            `│ 📡 *APIs:*\n` +
+            `│ apis.megan.qzz.io\n` +
+            `│ movieapi.megan.qzz.io\n` +
+            `│\n` +
+            `│ 👤 *Owner:* ${config.OWNER_NAME}\n` +
+            `│ 📞 ${config.OWNER_NUMBER}\n` +
+            `│\n` +
+            `│ 📱 *Pairing Site:*\n` +
+            `│ https://megan-session-pairing.onrender.com\n` +
+            `│\n` +
+            `│ 📥 *Deploy:* .deploy\n` +
+            `│ 📱 *Pair:* .pair <number>\n` +
+            `╰──────────────────◇\n${FOOTER}`;
+        
+        await sendBtn(sock, from, text, msg, [
+            { name: 'cta_url', buttonParamsJson: JSON.stringify({ display_text: '🔗 GitHub', url: 'https://github.com/TrackerWanga/megan-prime' }) }
+        ]);
+        await react('✅');
+    }
+});
+
+// ═══════════════════════════════════════════
+// 9. DEPLOY - Deployment guides
+// ═══════════════════════════════════════════
+commands.push({
+    name: 'deploy', description: 'Show deployment guides',
+    aliases: ['deployguide', 'host', 'tutorial'],
+    async execute({ msg, from, sender, args, bot, sock, react, reply }) {
+        const platform = args[0]?.toLowerCase();
+        
+        const guides = {
+            render: `╔══════════════════════╗\n║   🚀 DEPLOY: RENDER  ║\n╚══════════════════════╝\n\n` +
+                `│ 1. Fork repo on GitHub\n` +
+                `│ 2. Go to dashboard.render.com\n` +
+                `│ 3. New Web Service\n` +
+                `│ 4. Connect your GitHub repo\n` +
+                `│ 5. Build: npm install\n` +
+                `│ 6. Start: npm start\n` +
+                `│ 7. Add .env with SESSION=\n` +
+                `│ 8. Deploy! 🚀\n│\n│ ⏰ Free tier sleeps after 15min\n│ 💡 Use .update to keep updated\n╰──◇\n${FOOTER}`,
+            
+            heroku: `╔══════════════════════╗\n║  🚀 DEPLOY: HEROKU   ║\n╚══════════════════════╝\n\n` +
+                `│ 1. Fork repo on GitHub\n` +
+                `│ 2. Go to heroku.com\n` +
+                `│ 3. Create New App\n` +
+                `│ 4. Connect GitHub repo\n` +
+                `│ 5. Add buildpack: nodejs\n` +
+                `│ 6. Add .env vars\n` +
+                `│ 7. Deploy branch: main\n` +
+                `│ 8. Done! 🚀\n│\n│ 💡 Use .update to pull changes\n╰──◇\n${FOOTER}`,
+            
+            pterodactyl: `╔══════════════════════╗\n║ 🚀 DEPLOY: PTERODACTYL║\n╚══════════════════════╝\n\n` +
+                `│ 1. Upload files to server\n` +
+                `│ 2. npm install\n` +
+                `│ 3. Add .env with SESSION=\n` +
+                `│ 4. Start: npm start\n` +
+                `│ 5. Use PM2: pm2 start index.js\n` +
+                `│\n` +
+                `│ 💡 PM2 keeps bot alive\n` +
+                `│ 💡 .update does git pull\n` +
+                `╰──◇\n${FOOTER}`,
+            
+            termux: `╔══════════════════════╗\n║  🚀 DEPLOY: TERMUX   ║\n╚══════════════════════╝\n\n` +
+                `│ 1. pkg install git nodejs\n` +
+                `│ 2. git clone <repo-url>\n` +
+                `│ 3. cd megan-prime\n` +
+                `│ 4. npm install\n` +
+                `│ 5. Add .env with SESSION=\n` +
+                `│ 6. npm start\n` +
+                `│\n` +
+                `│ 💡 Get session from pairing:\n` +
+                `│ .pair 254XXXXXXXXX\n` +
+                `╰──◇\n${FOOTER}`
+        };
+        
+        if (platform && guides[platform]) {
+            await sendBtn(sock, from, guides[platform], msg);
+        } else {
+            const text = `╔══════════════════════╗\n` +
+                `║  🚀 DEPLOY GUIDES    ║\n` +
+                `╚══════════════════════╝\n\n` +
+                `│ 📦 *Repo:*\n` +
+                `│ github.com/TrackerWanga/megan-prime\n` +
+                `│\n` +
+                `│ *Choose platform:*\n` +
+                `│ • .deploy render\n` +
+                `│ • .deploy heroku\n` +
+                `│ • .deploy pterodactyl\n` +
+                `│ • .deploy termux\n` +
+                `│\n` +
+                `│ 📱 *Get session:*\n` +
+                `│ • .pair 254XXXXXXXXX\n` +
+                `│ • https://megan-session-pairing.onrender.com\n` +
+                `╰──────────────────◇\n${FOOTER}`;
+            
+            await sendBtn(sock, from, text, msg, [
+                { name: 'quick_reply', buttonParamsJson: JSON.stringify({ display_text: '🚀 Render', id: 'cmd_.deploy render' }) },
+                { name: 'quick_reply', buttonParamsJson: JSON.stringify({ display_text: '💜 Heroku', id: 'cmd_.deploy heroku' }) },
+                { name: 'quick_reply', buttonParamsJson: JSON.stringify({ display_text: '📱 Termux', id: 'cmd_.deploy termux' }) }
+            ]);
+        }
+        await react('✅');
+    }
+});
+
+// ═══════════════════════════════════════════
+// 10. SESSION - Show how to get session
+// ═══════════════════════════════════════════
+commands.push({
+    name: 'session', description: 'How to get a WhatsApp session',
+    aliases: ['getsession', 'sessionguide'],
+    async execute({ msg, from, sender, args, bot, sock, react, reply }) {
+        await react('🔐');
+        
+        const text = `╔══════════════════════╗\n` +
+            `║  🔐 GET SESSION      ║\n` +
+            `╚══════════════════════╝\n\n` +
+            `│ *Method 1: Pairing Code*\n` +
+            `│ .pair 254XXXXXXXXX\n` +
+            `│\n` +
+            `│ *Method 2: Website*\n` +
+            `│ https://megan-session-pairing.onrender.com\n` +
+            `│\n` +
+            `│ *Method 3: QR Scan*\n` +
+            `│ Set SESSION='' in .env\n` +
+            `│ Start bot, scan QR code\n` +
+            `│ Session auto-saves to .env\n` +
+            `│\n` +
+            `│ 📦 *Deploy after:* .deploy\n` +
+            `╰──────────────────◇\n${FOOTER}`;
+        
+        await sendBtn(sock, from, text, msg, [
+            { name: 'cta_url', buttonParamsJson: JSON.stringify({ display_text: '🔗 Pairing Site', url: 'https://megan-session-pairing.onrender.com' }) }
+        ]);
+        await react('✅');
+    }
+});
+
