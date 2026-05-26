@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: megan-prime
+    env: node
+    buildCommand: npm install
+    startCommand: bash start.sh
+    envVars:
+      - key: NODE_VERSION
+        value: 22.11.0
+      - key: SESSION
+        sync: false
+      - key: BOT_NAME
+        value: Megan-Prime
+      - key: PREFIX
+        value: .
+      - key: MODE
+        value: public
