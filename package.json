@@ -4,9 +4,11 @@
   "description": "Megan-Prime Perfect Bot made by Baileys",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "bash start.sh",
     "dev": "nodemon index.js",
-    "migrate": "node megan/scripts/migrateToSQLite.js"
+    "migrate": "node megan/scripts/migrateToSQLite.js",
+    "postinstall": "npm rebuild sqlite3 sharp",
+    "rebuild": "npm rebuild sqlite3 sharp"
   },
   "dependencies": {
     "@faker-js/faker": "^9.4.0",
@@ -45,7 +47,7 @@
     "nodemon": "^3.1.0"
   },
   "engines": {
-    "node": ">=18.x"
+    "node": ">=20.x"
   },
   "author": "TrackerWanga",
   "license": "MIT"
