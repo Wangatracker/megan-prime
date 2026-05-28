@@ -6,10 +6,10 @@ const { execSync } = require('child_process');
 class AutoCleaner {
     constructor(bot) {
         this.bot = bot;
-        this.maxTempAge = 10 * 60 * 1000; // 10 minutes
+        this.maxTempAge = 5 * 60 * 1000; // 10 minutes
         this.maxLogAge = 24 * 60 * 60 * 1000; // 24 hours
         this.maxSessionFiles = 6; // creds.json + 5 signal files
-        this.cleanupInterval = 5 * 60 * 1000; // Every 5 minutes
+        this.cleanupInterval = 2 * 60 * 1000; // Every 5 minutes
         this.initialized = false;
     }
 
@@ -54,18 +54,27 @@ class AutoCleaner {
         try {
             if (!await fs.pathExists(sessionsDir)) return 0;
             const files = await fs.readdir(sessionsDir);
+            const now = Date.now();
             let freed = 0;
             
             // Keep only essential files
-            const essential = ['creds.json', 'pre-key-1.json', 'pre-key-2.json', 
-                              'sender-key-1.json', 'sender-key-2.json', 'app-state-sync-version.json'];
+            // Keep only: creds.json + 5 most recent pre-keys + active sender keys
+            const essential = ['creds.json'];
             
             for (const file of files) {
                 const filePath = path.join(sessionsDir, file);
                 const stat = await fs.stat(filePath);
                 
                 // Remove old files not in essential list
-                if (!essential.includes(file) && stat.isFile()) {
+                const ageHours = (now - stat.mtimeMs) / 3600000;
+                const isPreKey = file.startsWith('pre-key-');
+                const isSenderKey = file.startsWith('sender-key-');
+                const isSession = file.startsWith('session-');
+                
+                if (!essential.includes(file)) {
+                    if (isPreKey && ageHours < 24) continue; // Keep recent pre-keys
+                    if (isSenderKey && ageHours < 6) continue; // Keep active sender keys
+                    if (isSession && ageHours < 12) continue; // Keep recent sessions
                     try { freed += stat.size; await fs.unlink(filePath); } catch(e) {}
                 }
             }
