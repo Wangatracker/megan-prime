@@ -1,13 +1,13 @@
-// Megan-Prime Media Processor - Complete with all methods
-const ffmpeg = require('fluent-ffmpeg');
-const ffmpegPath = require('ffmpeg-static');
+// Megan-Prime Media Processor - Using Megan APIs (No FFmpeg)
 const sharp = require('sharp');
 const Jimp = require('jimp');
 const fs = require('fs-extra');
 const path = require('path');
+const axios = require('axios');
 const { Sticker, StickerTypes } = require('wa-sticker-formatter');
 
-ffmpeg.setFfmpegPath(ffmpegPath);
+const API_BASE = 'https://apis.megan.qzz.io';
+const API_KEY = 'megan_admin_master';
 
 class MediaProcessor {
     constructor() {
@@ -15,6 +15,20 @@ class MediaProcessor {
         fs.ensureDirSync(this.tempDir);
     }
 
+    // Upload buffer to Catbox for API processing
+    async uploadBuffer(buffer, filename = 'media.jpg') {
+        const FormData = require('form-data');
+        const form = new FormData();
+        form.append('reqtype', 'fileupload');
+        form.append('fileToUpload', buffer, { filename });
+        const res = await axios.post('https://catbox.moe/user/api.php', form, {
+            headers: form.getHeaders(),
+            timeout: 60000
+        });
+        return res.data.trim();
+    }
+
+    // Create sticker using wa-sticker-formatter (local, fast)
     async createSticker(buffer, options = {}) {
         try {
             const sticker = new Sticker(buffer, {
@@ -27,6 +41,7 @@ class MediaProcessor {
         } catch (error) { throw error; }
     }
 
+    // Sticker to Image
     async stickerToImage(buffer) {
         try {
             try { return await sharp(buffer).png().toBuffer(); }
@@ -37,96 +52,67 @@ class MediaProcessor {
         } catch (error) { throw error; }
     }
 
+    // Extract audio from video using Megan API
+    async extractAudio(buffer) {
+        try {
+            const url = await this.uploadBuffer(buffer, 'video.mp4');
+            const res = await axios.get(`${API_BASE}/api/audio/extract`, {
+                params: { url, apikey: API_KEY },
+                responseType: 'arraybuffer',
+                timeout: 120000
+            });
+            return Buffer.from(res.data);
+        } catch(e) {
+            // Fallback: try converter endpoint
+            const url = await this.uploadBuffer(buffer, 'video.mp4');
+            const res = await axios.get(`${API_BASE}/api/converter/video-to-audio`, {
+                params: { url, apikey: API_KEY },
+                responseType: 'arraybuffer',
+                timeout: 120000
+            });
+            return Buffer.from(res.data);
+        }
+    }
+
+    // Convert to MP3 (alias)
     async toAudio(buffer) {
-        const inputPath = path.join(this.tempDir, `input_${Date.now()}.audio`);
-        const outputPath = path.join(this.tempDir, `output_${Date.now()}.mp3`);
-        try {
-            await fs.writeFile(inputPath, buffer);
-            await new Promise((resolve, reject) => {
-                ffmpeg(inputPath)
-                    .noVideo()
-                    .audioCodec('libmp3lame')
-                    .audioBitrate(128)
-                    .toFormat('mp3')
-                    .on('end', resolve)
-                    .on('error', reject)
-                    .save(outputPath);
-            });
-            return await fs.readFile(outputPath);
-        } finally {
-            await fs.remove(inputPath).catch(() => {});
-            await fs.remove(outputPath).catch(() => {});
-        }
+        return await this.extractAudio(buffer);
     }
 
+    // Convert to PTT (voice note) - use API
     async toPTT(buffer) {
-        const inputPath = path.join(this.tempDir, `input_${Date.now()}.audio`);
-        const outputPath = path.join(this.tempDir, `output_${Date.now()}.ogg`);
-        try {
-            await fs.writeFile(inputPath, buffer);
-            await new Promise((resolve, reject) => {
-                ffmpeg(inputPath)
-                    .noVideo()
-                    .audioCodec('libopus')
-                    .audioBitrate(24)
-                    .audioChannels(1)
-                    .audioFrequency(16000)
-                    .toFormat('ogg')
-                    .on('end', resolve)
-                    .on('error', reject)
-                    .save(outputPath);
-            });
-            return await fs.readFile(outputPath);
-        } finally {
-            await fs.remove(inputPath).catch(() => {});
-            await fs.remove(outputPath).catch(() => {});
-        }
+        const url = await this.uploadBuffer(buffer, 'audio.mp3');
+        const res = await axios.get(`${API_BASE}/api/audio/to-ptt`, {
+            params: { url, apikey: API_KEY },
+            responseType: 'arraybuffer',
+            timeout: 60000
+        });
+        return Buffer.from(res.data);
     }
 
-    async extractAudio(buffer) { return await this.toAudio(buffer); }
-
-    async changeSpeed(buffer, speed) {
-        const inputPath = path.join(this.tempDir, `input_${Date.now()}.audio`);
-        const outputPath = path.join(this.tempDir, `output_${Date.now()}.mp3`);
-        try {
-            await fs.writeFile(inputPath, buffer);
-            await new Promise((resolve, reject) => {
-                ffmpeg(inputPath)
-                    .audioFilters(`atempo=${speed}`)
-                    .audioCodec('libmp3lame')
-                    .toFormat('mp3')
-                    .on('end', resolve)
-                    .on('error', reject)
-                    .save(outputPath);
-            });
-            return await fs.readFile(outputPath);
-        } finally {
-            await fs.remove(inputPath).catch(() => {});
-            await fs.remove(outputPath).catch(() => {});
-        }
+    // Change speed using Megan API
+    async changeSpeed(buffer, speed = 1.5) {
+        const url = await this.uploadBuffer(buffer, 'audio.mp3');
+        const res = await axios.get(`${API_BASE}/api/audio/speed`, {
+            params: { url, speed, apikey: API_KEY },
+            responseType: 'arraybuffer',
+            timeout: 60000
+        });
+        return Buffer.from(res.data);
     }
 
-    async changeVolume(buffer, volume) {
-        const inputPath = path.join(this.tempDir, `input_${Date.now()}.audio`);
-        const outputPath = path.join(this.tempDir, `output_${Date.now()}.mp3`);
-        try {
-            await fs.writeFile(inputPath, buffer);
-            await new Promise((resolve, reject) => {
-                ffmpeg(inputPath)
-                    .audioFilters(`volume=${volume}`)
-                    .audioCodec('libmp3lame')
-                    .toFormat('mp3')
-                    .on('end', resolve)
-                    .on('error', reject)
-                    .save(outputPath);
-            });
-            return await fs.readFile(outputPath);
-        } finally {
-            await fs.remove(inputPath).catch(() => {});
-            await fs.remove(outputPath).catch(() => {});
-        }
+    // Change volume using Megan API
+    async changeVolume(buffer, volume = 2) {
+        const url = await this.uploadBuffer(buffer, 'audio.mp3');
+        const res = await axios.get(`${API_BASE}/api/audio/volume`, {
+            params: { url, volume, apikey: API_KEY },
+            responseType: 'arraybuffer',
+            timeout: 60000
+        });
+        return Buffer.from(res.data);
     }
 
+    // Circle crop
     async createCircle(buffer) {
         try {
             const image = await Jimp.read(buffer);
@@ -143,6 +129,7 @@ class MediaProcessor {
         }
     }
 
+    // Image filters
     async applyFilter(buffer, filter) {
         let image = await Jimp.read(buffer);
         switch (filter) {
@@ -159,6 +146,7 @@ class MediaProcessor {
         return await image.getBufferAsync(Jimp.MIME_PNG);
     }
 
+    // Remove background
     async removeBackground(buffer) {
         try {
             const image = await Jimp.read(buffer);
@@ -178,6 +166,7 @@ class MediaProcessor {
         }
     }
 
+    // Meme generator
     async createMeme(topText, bottomText, baseImageBuffer) {
         const image = await Jimp.read(baseImageBuffer);
         const font = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
@@ -194,11 +183,11 @@ class MediaProcessor {
         return await image.getBufferAsync(Jimp.MIME_JPEG);
     }
 
+    // Clean temp files
     async cleanup() {
         try {
             const files = await fs.readdir(this.tempDir);
-            let deleted = 0;
-            let freed = 0;
+            let deleted = 0, freed = 0;
             for (const file of files) {
                 const filePath = path.join(this.tempDir, file);
                 const stats = await fs.stat(filePath);
